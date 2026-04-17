@@ -1,6 +1,6 @@
 # nanoddpm-pro
 
-From-scratch Denoising Diffusion Probabilistic Model (DDPM) with a mini-UNet, Classifier-Free Guidance (CFG), Denoising Diffusion Implicit Models (DDIM) sampling & PCA-FID evaluation for CIFAR-10 in <200 lines. This project builds on the original ~170-line implementation: [chizkidd/nanoddpm](https://github.com/chizkidd/nanoddpm).
+From-scratch implementation of **Denoising Diffusion Probabilistic Model (DDPM)** with a **mini-UNet, Classifier-Free Guidance (CFG), Denoising Diffusion Implicit Models (DDIM) sampling & PCA-FID evaluation** on **CIFAR-10** dataset in ~200 lines. This project builds on the original ~170-line MNIST implementation: [chizkidd/nanoddpm](https://github.com/chizkidd/nanoddpm).
 
 [![Base Repo](https://img.shields.io/badge/%20Base%20Repo-nanoddpm-2ea44f?style=flat-square&logo=github)](https://github.com/chizkidd/nanoddpm)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
@@ -15,13 +15,13 @@ From-scratch Denoising Diffusion Probabilistic Model (DDPM) with a mini-UNet, Cl
 - **DDIM Sampling**: Deterministic reverse process for 10–50× faster generation
 - **PCA-FID**: Lightweight, from-scratch quality tracking (no `Inception-V3`)
 - **Library-PC / Colab Friendly**: Configurable resolution (`--resize`) and step count to fit free-tier limits
-- **Single-File Design**: ~200 lines, fully commented, CLI-ready
+- **Single-File Design**: ~200 lines, CLI-ready
 
 ### Lineage
 | Project | Description | Link |
 |---------|-------------|------|
-| **nanoddpm** | From-scratch DDPM for MNIST (~170 lines) | [chizkidd/nanoddpm](https://github.com/chizkidd/nanoddpm) |
-| **nanoddpm-pro** | CIFAR-10 upgrade with CFG, DDIM & PCA-FID (~200 lines) | `./` |
+| **nanoddpm** | From-scratch DDPM for MNIST | [nanoddpm](https://github.com/chizkidd/nanoddpm) |
+| **nanoddpm-pro** | CIFAR-10 upgrade with CFG, DDIM & PCA-FID | `./` |
 
 ## Quick Start
 ```bash
@@ -77,7 +77,7 @@ nanoddpm-pro/
 
 ## Learn More
 - `blog-pro.md` → Step-by-step math breakdown & architectural diagrams
-- `nanoddpm-pro.py` → Heavily commented source (read top-to-bottom like a textbook)
+- `nanoddpm-pro.py` → Source code file(read top-to-bottom like a textbook)
 - `nanoddpm-pro.ipynb` → Colab Notebook with interactive sliders for CFG scale, DDIM steps, and class selection
 
 ## Acknowledgments
