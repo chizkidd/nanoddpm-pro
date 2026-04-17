@@ -1,12 +1,12 @@
-# nanoddpm-pro
-
-From-scratch implementation of **Denoising Diffusion Probabilistic Model (DDPM)** with a **mini-UNet, Classifier-Free Guidance (CFG), Denoising Diffusion Implicit Models (DDIM) sampling & PCA-FID evaluation** on **CIFAR-10** dataset in ~200 lines. This project builds on the original ~170-line MNIST implementation: [chizkidd/nanoddpm](https://github.com/chizkidd/nanoddpm).
-
 [![Base Repo](https://img.shields.io/badge/%20Base%20Repo-nanoddpm-2ea44f?style=flat-square&logo=github)](https://github.com/chizkidd/nanoddpm)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/chizkidd/nanoddpm-pro/blob/main/nanoddpm_pro.ipynb)
+
+# nanoddpm-pro
+
+From-scratch implementation of **Denoising Diffusion Probabilistic Model (DDPM)** with a **mini-UNet, Classifier-Free Guidance (CFG), Denoising Diffusion Implicit Models (DDIM) sampling & PCA-FID evaluation** on **CIFAR-10** dataset in ~200 lines. This project builds on the original ~170-line MNIST implementation: [chizkidd/nanoddpm](https://github.com/chizkidd/nanoddpm).
 
 
 ## Features
@@ -56,16 +56,7 @@ nanoddpm-pro.ipynb
 └── README.md
 ```
 
-nanoddpm-pro/
-├── .github/
-│   └── workflows/
-│       └── ci.yml          # ← Create this exact path
-├── nanoddpm_pro.py
-├── requirements.txt        # ← Place at root
-├── README.md
-└── blog_pro.md
-
-## CLI Arguments
+## CLI Config
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--epochs` | `3` | Training epochs |
