@@ -21,4 +21,4 @@ jobs:
           pip install -r requirements.txt
       - name: Smoke test (CPU, minimal)
         run: |
-          python nanoddpm_pro.py --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
+          python nanoddpm-pro.py --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
