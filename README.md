@@ -72,7 +72,7 @@ nanoddpm-pro.ipynb
 - `nanoddpm-pro.ipynb` → Colab Notebook with interactive sliders for CFG scale, DDIM steps, and class selection
 
 ## Acknowledgments
-Inspired by Andrej Karpathy's educational builds (`micrograd`, `minbpe`, `microGPT`) and the foundational DDPM/DDIM papers. Built for students, tinkerers, and anyone who believes diffusion shouldn't be a black box.
+Inspired by Andrej Karpathy's educational builds (`micrograd`, `minbpe`, `microGPT`) and the foundational DDPM/DDIM papers. Built for students, tinkerers, and anyone who wants to decipher the black box nature of deep learning (in this case diffusion models).
 
 ## Philosophy
 - _The readability of the code should translate to learnable mathematics._
