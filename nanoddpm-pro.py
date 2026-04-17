@@ -50,10 +50,11 @@ def sinusoidal_embedding(t, dim, max_period=10000):
 class ResBlock(nn.Module):
     def __init__(self, in_ch, out_ch, time_dim, num_classes=10, dropout=0.1):
         super().__init__()
+        self.num_groups_gn = min(8, out_ch)
         self.conv1 = nn.Conv2d(in_ch, out_ch, 3, padding=1)
-        self.norm1 = nn.GroupNorm(8, out_ch)
+        self.norm1 = nn.GroupNorm(self.num_groups_gn, out_ch)
         self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1)
-        self.norm2 = nn.GroupNorm(8, out_ch)
+        self.norm2 = nn.GroupNorm(self.num_groups_gn, out_ch)
         self.time_mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_dim, out_ch))
         self.class_emb = nn.Embedding(num_classes, time_dim)
         self.class_proj = nn.Linear(time_dim, out_ch) 
