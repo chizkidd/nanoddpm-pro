@@ -16,7 +16,7 @@ From-scratch implementation of **Denoising Diffusion Probabilistic Model (DDPM)*
 - **Classifier-Free Guidance (CFG)**: Joint conditional/unconditional training, steer generation at inference
 - **DDIM Sampling**: Deterministic reverse process for 10–50× faster generation
 - **PCA-FID**: Lightweight, from-scratch quality tracking (no `Inception-V3`)
-- **Library-PC / Colab Friendly**: Configurable resolution (`--resize`) and step count to fit free-tier limits
+- **Notebook Friendly**: Configurable resolution (`--resize`) and step count to fit free-tier limits
 - **Single-File Design**: ~200 lines, CLI-ready
 
 ### Lineage
@@ -51,7 +51,6 @@ nanoddpm-pro/
 │       └── ci.yml             # Ensure continuous integration (source code: `nanoddpm-pro.py`)
 ├── nanoddpm-pro.py            # Single-file implementation (~200 lines)
 ├── nanoddpm-pro.ipynb         # Colab Notebook implementation with Visualization
-nanoddpm-pro.ipynb
 ├── nanoddpm_pro_metrics.json  # Auto-generated training metrics
 ├── requirements.txt           # torch, torchvision, numpy, matplotlib, tqdm
 ├── blog-pro.md                # Math walkthrough (forward/reverse, CFG, DDIM, PCA-FID)
