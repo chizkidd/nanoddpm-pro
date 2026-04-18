@@ -4,7 +4,7 @@
 > - **DDIM** (`nanoddpm-pro.py`): Discrete timesteps, deterministic reverse loop (~200 lines)
 > - **EDM** (`nanoddpm-pro-edm.py`): Continuous noise, preconditioning, Euler/Heun ODE solvers (~220 lines)
 >
-> No black boxes—just raw PyTorch and explicit diffusion math.
+> No black boxes, just raw PyTorch and explicit diffusion math.
 
 ---
 
@@ -55,16 +55,9 @@ Setting $\sigma_t = 0$ removes noise `z`, making the path deterministic. We can 
 ## 3. EDM: Optimized Schedule & ODE Sampling *(Advanced Variant)*
 EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **continuous, mathematically grounded framework**. Instead of discrete timesteps, diffusion is treated as an ODE in noise space.
 
-### Core Improvements over DDIM:
-| Feature | DDIM | EDM |
-|---------|------|-----|
-| **Parameterization** | Discrete `t` with `α_t`/`β_t` | Continuous `σ` (sigma) |
-| **Noise Sampling** | Uniform `t ~ [0, T]` | Log-normal `σ ~ exp(𝒩(-1.2, 1.2²))` |
-| **Stability** | Manual clipping needed | Preconditioning (`c_in`, `c_out`, `c_skip`) |
-| **Solver** | Fixed reverse algebra | Interchangeable Euler/Heun ODE solvers |
+- **Log-Normal Noise Sampling:** Draw noise levels from `σ ~ exp(𝒩(P_mean, P_std²))`. This concentrates training on mid-noise regimes where gradients are most informative.
+- **I/O Preconditioning** (Karras et al. 2022): Wrap the network with analytically derived scalars so it always sees normalized inputs/outputs, stabilizing gradients across the entire trajectory
 
-### EDM Math (Concise):
-- **Preconditioning** (Karras et al. 2022):
   $$
   c_{\text{in}} = \frac{1}{\sqrt{\sigma^2+1}}, \quad c_{\text{noise}} = \frac{\log\sigma}{4}, \quad c_{\text{skip}} = \frac{1}{\sigma^2+1}, \quad c_{\text{out}} = \frac{\sigma}{\sqrt{\sigma^2+1}}
   $$
@@ -72,26 +65,39 @@ EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **c
   D(x, \sigma) = c_{\text{skip}} \cdot x + c_{\text{out}} \cdot F(x \cdot c_{\text{in}}, c_{\text{noise}})
   $$
 
-- **Euler Solver** (1st-order, fast):
-  $$
-  x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
-  $$
+- **Deterministic ODE Sampler:** The reverse process becomes a first-order ODE: $\frac{dx}{d\sigma} = \frac{x - D(x,\sigma)}{\sigma}$. Discretizing gives two solver options: **Euler** or **Heun**.
+    - **Euler Solver** (1st-order, fast):
+    $$
+    x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
+    $$
 
-- **Heun Solver** (2nd-order, quality):
-  $$
-  \begin{aligned}
-  x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
-  x_{\text{next}} &= x + \frac{\sigma_{\text{next}} - \sigma}{2} \cdot \left( \frac{x - D}{\sigma} + \frac{x_{\text{pred}} - D_{\text{pred}}}{\sigma_{\text{next}}} \right)
-  \end{aligned}
-  $$
+    - **Heun Solver** (2nd-order, quality):
+    $$
+    \begin{aligned}
+    x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
+    x_{\text{next}} &= x + \frac{\sigma_{\text{next}} - \sigma}{2} \cdot \left( \frac{x - D}{\sigma} + \frac{x_{\text{pred}} - D_{\text{pred}}}{\sigma_{\text{next}}} \right)
+    \end{aligned}
+    $$
 
-**Tradeoff:** Heun requires 2× network calls but typically achieves 10–20% lower PCA-FID at the same step count.  
+
+### Core Improvements over DDIM:
+| Feature | DDIM | EDM |
+|---------|------|-----|
+| **Parameterization** | Discrete `t` with `α_t`/`β_t` | Continuous `σ` (sigma) |
+| **Math Foundation** | Reparameterizes DDPM reverse mean into a deterministic loop | Solves the diffusion ODE `dx/dσ = (x - D(x,σ))/σ` |
+| **Step Skipping** | Requires re-deriving reverse equations for arbitrary step counts | Naturally supports any number of steps; just change the `σ` grid |
+| **Noise Sampling** | Uniform `t ~ [0, T]` | Log-normal `σ ~ exp(𝒩(-1.2, 1.2²))` |
+| **Stability** | Manual clipping needed | Preconditioning (`c_in`, `c_out`, `c_skip`) |
+| **Solver** | Fixed reverse algebra | Interchangeable Euler/Heun ODE solvers |
+
+**Tradeoff:** Heun requires 2× network calls but typically achieves 10-20% lower PCA-FID at the same step count.  
+**Result:** Training converges faster, gradients stay stable at higher resolutions, and sampling naturally supports arbitrary step counts with interchangeable solvers.
 **Code:** `edm_sampler(solver='euler'/'heun')` in `nanoddpm-pro-edm.py`
 
 ---
 
 ## 4. PCA-FID: Lightweight Quality Tracking *(Shared)*
-Standard FID uses Inception-V3 to extract 2048-d features—heavy, opaque, and overkill for 32×32 images. PCA-FID replaces the black-box extractor with **unsupervised dimensionality reduction**:
+Standard FID uses Inception-V3 to extract 2048-dim features-heavy, opaque, and overkill for 32×32 images. PCA-FID replaces the black-box extractor with **unsupervised dimensionality reduction**:
 
 1. Flatten images to `[B, 3072]`
 2. Compute top-32 principal components across real + generated batches
@@ -112,8 +118,8 @@ $$
 ## Which Variant Should You Use?
 | Use Case | Recommended Variant |
 |----------|-------------------|
-| Learning diffusion basics | **DDIM** (`nanoddpm-pro.py`) — simpler math, fewer concepts |
-| Research/quality focus | **EDM** (`nanoddpm-pro-edm.py`) — better stability, interchangeable solvers |
+| Learning diffusion basics | **DDIM** (`nanoddpm-pro.py`) -- simpler math, fewer concepts |
+| Research/quality focus | **EDM** (`nanoddpm-pro-edm.py`) -- better stability, interchangeable solvers |
 | Colab free tier | Either, but use `--resize 16 --sample_steps 10` for speed |
 | Portfolio depth | Both! Show progression: DDIM → EDM |
 

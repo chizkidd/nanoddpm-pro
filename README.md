@@ -43,6 +43,9 @@ git clone https://github.com/chizkidd/nanoddpm-pro.git
 cd nanoddpm-pro
 pip install -r requirements.txt
 
+# EDM + Heun (Recommended)
+python nanoddpm-pro.py --sampler edm --solver heun --epochs 20 --cfg_scale 4.0 --resize 32
+
 # DDIM baseline (simpler, great for learning)
 python nanoddpm-pro-ddim.py --epochs 20 --cfg_scale 4.0 --resize 32
 
