@@ -22,3 +22,4 @@ jobs:
       - name: Smoke test (CPU, & minimal)
         run: |
           python nanoddpm-pro.py --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
+          python nanoddpm-pro-edm.py --epochs 1 --batch_size 16 --resize 16 --device cpu
