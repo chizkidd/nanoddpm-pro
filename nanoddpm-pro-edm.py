@@ -32,7 +32,7 @@ def sample_sigmas(n, device):
 # === DATASET (CIFAR-10) ===
 transform = T.Compose([T.Resize(args.resize), T.ToTensor(), T.Normalize([0.5]*3, [0.5]*3)])
 dataset = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
-loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=True)
+loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
 real_batch, real_labels = next(iter(torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=False)))
 real_batch = real_batch.to(device)
 
@@ -51,7 +51,9 @@ class ResBlock(nn.Module):
         self.norm1 = nn.GroupNorm(self.num_groups_gn, out_ch)
         self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1)
         self.norm2 = nn.GroupNorm(self.num_groups_gn, out_ch)
-        self.time_mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_dim, out_ch))
+        
+        # Project 1D c_noise → time_dim → out_ch
+        self.time_mlp = nn.Sequential(nn.Linear(1, time_dim), nn.SiLU(), nn.Linear(time_dim, out_ch))
         self.class_emb = nn.Embedding(num_classes, time_dim)
         self.class_proj = nn.Linear(time_dim, out_ch)
         self.dropout = nn.Dropout(dropout)
@@ -60,7 +62,7 @@ class ResBlock(nn.Module):
 
     def forward(self, x, c_noise, labels=None):
         h = F.silu(self.norm1(self.conv1(x)))
-        t_emb = self.time_mlp(c_noise)
+        t_emb = self.time_mlp(c_noise.unsqueeze(-1)) # Unsqueeze to [B, 1] before MLP
         if labels is None:
             c_emb = torch.zeros_like(t_emb)
         else:
