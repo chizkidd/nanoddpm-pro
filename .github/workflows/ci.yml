@@ -19,7 +19,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Smoke test (CPU, & minimal)
+      - name: Smoke test (CPU, minimal)
         run: |
-          python nanoddpm-pro.py --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
-          python nanoddpm-pro-edm.py --epochs 1 --batch_size 16 --resize 16 --device cpu
+          python nanoddpm-pro-ddim.py --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
+          python nanoddpm-pro-edm.py --epochs 1 --batch_size 16 --resize 16 --sample_steps 10 --solver euler --device cpu
