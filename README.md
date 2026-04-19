@@ -66,14 +66,20 @@ python nanoddpm-pro.py --sampler edm --target epsilon --solver euler --epochs 10
 ```
 nanoddpm-pro/
 ├── .github/
-│   └── workflows/
-│       └── ci.yml                 # CI: smoke test 4 core configs on CPU
-├── nanoddpm-pro.py                # Unified implementation (~300 lines)
-├── nanoddpm-pro.ipynb             # Colab notebook with interactive widgets
-├── requirements.txt               # torch, torchvision, numpy, matplotlib, tqdm
+│   ├── workflows/
+│   │   └── ci.yml                 # CI: smoke test 4 core configs on CPU
+│   └── .gitkeep                   # Preserve empty directory in git
+├── archive/                       # Legacy v1 implementations (preserved for reference)
+│   ├── nanoddpm-pro-ddim.ipynb
+│   ├── nanoddpm-pro-edm-v1.ipynb
+│   ├── nanoddpm-pro-edm-v2.ipynb
+│   └── nanoddpm-pro-v1.py
 ├── blog-pro.md                    # Math walkthrough (CFG, DDIM, EDM, v-pred, PCA-FID)
 ├── LICENSE
-└── README.md
+├── nanoddpm-pro.ipynb             # Colab notebook with interactive widgets
+├── nanoddpm-pro.py                # Unified implementation (~300 lines)
+├── README.md
+└── requirements.txt               # torch, torchvision, numpy, matplotlib, tqdm
 ```
 
 ## CLI Config
@@ -108,9 +114,10 @@ nanoddpm-pro/
 | `--solver` | `euler` | Sampling method: `euler` (fast) or `heun` (quality) |
 
 ## Learn More
-- `blog-pro.md` → Step-by-step math: CFG, DDIM reverse loop, EDM preconditioning, v-prediction, Heun correction, PCA-FID
-- `nanoddpm-pro.py` → Unified source code (read top-to-bottom like a textbook)
-- `nanoddpm-pro.ipynb` → Colab notebook with interactive sliders for CFG, sampler, solver, target, steps, and class selection
+- `blog-pro.md` → Step-by-step math: CFG, DDIM reverse loop, EDM preconditioning, v-prediction, Heun correction, PCA-FID.
+- `nanoddpm-pro.py` → Unified source code (read top-to-bottom like a textbook).
+- `nanoddpm-pro.ipynb` → Colab notebook with interactive sliders for CFG, sampler, solver, target, steps, and class selection.
+- `archive/` → Legacy v1 implementations for reference and comparison
 
 ## Acknowledgments
 Inspired by Andrej Karpathy's educational builds (`microGPT`) and the foundational papers: DDPM (Ho et al.), DDIM (Song et al.), EDM (Karras et al.). Built for students, tinkerers, and anyone who believes diffusion shouldn't be a black box.
