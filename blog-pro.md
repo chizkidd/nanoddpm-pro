@@ -1,10 +1,8 @@
-# nanoddpm-pro: Fast, Guided Diffusion from Scratch
+# nanoddpm-pro: Fast, Guided Diffusion from Scratch (~300 lines)
 
-> Upgrading `nanoddpm` (MNIST) to CIFAR-10 with a **Mini-UNet, Classifier-Free Guidance (CFG), and PCA-FID evaluation**. Two sampling variants included:
-> - **DDIM** (`nanoddpm-pro.py`): Discrete timesteps, deterministic reverse loop (~200 lines)
-> - **EDM** (`nanoddpm-pro-edm.py`): Continuous noise, preconditioning, Euler/Heun ODE solvers (~220 lines)
+> Upgrading `nanoddpm` (MNIST) to CIFAR-10 with a **Mini-UNet, Classifier-Free Guidance (CFG), DDIM/EDM sampling, Euler/Heun ODE solvers, v-prediction, and PCA-FID evaluation**.
 >
-> No black boxes, just raw PyTorch and explicit diffusion math.
+> A single, modular file (`nanoddpm-pro.py`) that cleanly branches between sampling frameworks via CLI flags. No black boxes; just raw PyTorch and explicit diffusion math.
 
 ---
 
@@ -55,9 +53,9 @@ Setting $\sigma_t = 0$ removes noise `z`, making the path deterministic. We can 
 ## 3. EDM: Optimized Schedule & ODE Sampling *(Advanced Variant)*
 EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **continuous, mathematically grounded framework**. Instead of discrete timesteps, diffusion is treated as an ODE in noise space.
 
+### Core Components
 - **Log-Normal Noise Sampling:** Draw noise levels from `σ ~ exp(𝒩(P_mean, P_std²))`. This concentrates training on mid-noise regimes where gradients are most informative.
-- **I/O Preconditioning** (Karras et al. 2022): Wrap the network with analytically derived scalars so it always sees normalized inputs/outputs, stabilizing gradients across the entire trajectory
-
+- **I/O Preconditioning** (Karras et al. 2022): Wrap the network with analytically derived scalars so it always sees normalized inputs/outputs, stabilizing gradients across the entire trajectory:
   $$
   c_{\text{in}} = \frac{1}{\sqrt{\sigma^2+1}}, \quad c_{\text{noise}} = \frac{\log\sigma}{4}, \quad c_{\text{skip}} = \frac{1}{\sigma^2+1}, \quad c_{\text{out}} = \frac{\sigma}{\sqrt{\sigma^2+1}}
   $$
@@ -65,20 +63,31 @@ EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **c
   D(x, \sigma) = c_{\text{skip}} \cdot x + c_{\text{out}} \cdot F(x \cdot c_{\text{in}}, c_{\text{noise}})
   $$
 
-- **Deterministic ODE Sampler:** The reverse process becomes a first-order ODE: $\frac{dx}{d\sigma} = \frac{x - D(x,\sigma)}{\sigma}$. Discretizing gives two solver options: **Euler** or **Heun**.
-    - **Euler Solver** (1st-order, fast):
-    $$
-    x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
-    $$
+### ODE Solvers: Euler vs Heun
+The reverse process becomes a first-order ODE: $\frac{dx}{d\sigma} = \frac{x - D(x,\sigma)}{\sigma}$. Discretizing gives two solver options:
 
-    - **Heun Solver** (2nd-order, quality):
-    $$
-    \begin{aligned}
-    x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
-    x_{\text{next}} &= x + \frac{\sigma_{\text{next}} - \sigma}{2} \cdot \left( \frac{x - D}{\sigma} + \frac{x_{\text{pred}} - D_{\text{pred}}}{\sigma_{\text{next}}} \right)
-    \end{aligned}
-    $$
+- **Euler Solver** (1st-order, fast):
+  $$
+  x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
+  $$
 
+- **Heun Solver** (2nd-order, quality):
+  $$
+  \begin{aligned}
+  x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
+  x_{\text{next}} &= x + \frac{\sigma_{\text{next}} - \sigma}{2} \cdot \left( \frac{x - D}{\sigma} + \frac{x_{\text{pred}} - D_{\text{pred}}}{\sigma_{\text{next}}} \right)
+  \end{aligned}
+  $$
+
+### Training Targets: Noise (`ε`) vs `v`-Prediction
+The network can be trained to predict different quantities. Both share the same architecture and ODE solvers, but differ in loss formulation and sampling decoding:
+
+| Target | Training Objective | Sampling Decode | Why Use It? |
+|--------|-------------------|-----------------|-------------|
+| **Noise (`ε`)** | Predicts added noise. Loss weighted by $1/c_{\text{out}}^2$. | $x_0 \approx D(x_\sigma, \sigma)$ | Standard DDPM/EDM baseline. Simple & effective. |
+| **`v`-Prediction** | Predicts $v = c_{\text{out}}\epsilon - c_{\text{skip}}x_0$. Uniform loss weighting. | $x_0 = c_{\text{skip}}x_\sigma - c_{\text{out}}D(x_\sigma, \sigma)$ | Used in SD2+, Imagen. Keeps gradient magnitudes uniform across all `σ`, improving stability at high noise. |
+
+**Key Insight:** Once decoded to $x_0$, the **Euler/Heun solvers apply identically** to both targets. This cleanly decouples training objectives from the sampling loop.
 
 ### Core Improvements over DDIM:
 | Feature | DDIM | EDM |
@@ -91,8 +100,8 @@ EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **c
 | **Solver** | Fixed reverse algebra | Interchangeable Euler/Heun ODE solvers |
 
 **Tradeoff:** Heun requires 2× network calls but typically achieves 10-20% lower PCA-FID at the same step count.  
-**Result:** Training converges faster, gradients stay stable at higher resolutions, and sampling naturally supports arbitrary step counts with interchangeable solvers.
-**Code:** `edm_sampler(solver='euler'/'heun')` in `nanoddpm-pro-edm.py`
+**Result:** Training converges faster, gradients stay stable at higher resolutions, and sampling naturally supports arbitrary step counts with interchangeable solvers and targets.  
+**Code:** `edm_sampler(solver='euler'/'heun', target='epsilon'/'v')` in `nanoddpm-pro.py`
 
 ---
 
@@ -115,12 +124,13 @@ $$
 
 ---
 
-## Which Variant Should You Use?
-| Use Case | Recommended Variant |
-|----------|-------------------|
-| Learning diffusion basics | **DDIM** (`nanoddpm-pro.py`) -- simpler math, fewer concepts |
-| Research/quality focus | **EDM** (`nanoddpm-pro-edm.py`) -- better stability, interchangeable solvers |
-| Colab free tier | Either, but use `--resize 16 --sample_steps 10` for speed |
-| Portfolio depth | Both! Show progression: DDIM → EDM |
+## Which Configuration Should You Use?
+| Use Case | Recommended Flags |
+|----------|------------------|
+| Learning diffusion basics | `--sampler ddim --target epsilon` (simpler math) |
+| Research/quality focus | `--sampler edm --target v --solver heun` (best stability) |
+| Rapid iteration | `--sampler edm --target epsilon --solver euler` (fastest) |
+| Colab free tier | `--resize 16 --sample_steps 10` for speed |
+| Portfolio depth | Train with `epsilon`, then compare `--target v` sampling |
 
-**Pro tip:** Train once with either variant, then swap samplers at inference to compare quality/speed tradeoffs directly.
+**Pro tip:** The unified file lets you swap samplers and targets at inference without retraining. Train once, then explore the 2×2 design space of `(sampler, target)` to see how each choice affects final quality.

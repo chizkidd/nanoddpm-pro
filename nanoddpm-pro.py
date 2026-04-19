@@ -1,5 +1,5 @@
-# nanoddpm-pro.py: Unified DDPM for CIFAR-10 (~260 lines)
-# Features: Mini-UNet, Classifier-Free Guidance, DDIM & EDM samplers, Euler/Heun solvers for EDM, PCA-FID
+# nanoddpm-pro.py: Unified DDPM for CIFAR-10 (~300 lines)
+# Features: Mini-UNet, Classifier-Free Guidance, DDIM/EDM samplers, Euler/Heun solvers, v-prediction, PCA-FID
 # Educational build inspired by micrograd/minbpe/nanoddpm
 
 import argparse, torch, torch.nn as nn, torch.optim as optim
@@ -19,11 +19,12 @@ parser.add_argument('--sampler', type=str, default='edm', choices=['ddim', 'edm'
 parser.add_argument('--steps', type=int, default=1000, help='DDIM diffusion timesteps T')
 parser.add_argument('--sample_steps', type=int, default=20, help='EDM solver discretization steps')
 parser.add_argument('--solver', type=str, default='euler', choices=['euler', 'heun'], help='ODE solver (EDM only)')
+parser.add_argument('--target', type=str, default='epsilon', choices=['epsilon', 'v'], help='Training target: noise (epsilon) or v-prediction')
 args = parser.parse_args()
 device = torch.device(args.device)
 torch.manual_seed(42)
 USE_EDM = args.sampler == 'edm'
-print(f"▶ nanoddpm-pro | {device} | Sampler: {args.sampler} | CFG: {args.cfg_scale} | Resize: {args.resize}")
+print(f"▶ nanoddpm-pro | {device} | Sampler: {args.sampler} | Target: {args.target} | CFG: {args.cfg_scale} | Resize: {args.resize}")
 
 # === NOISE SCHEDULES ===
 if not USE_EDM:
@@ -132,7 +133,7 @@ def forward_diffusion(x0, t):
     return sqrt_ab * x0 + sqrt_1m * eps, eps
 
 @torch.no_grad()
-def sample_ddim(n, labels, cfg_scale=1.0, ddim_steps=50):
+def sample_ddim(n, labels, cfg_scale=1.0, ddim_steps=50, target='epsilon'):
     model.eval()
     x = torch.randn(n, 3, args.resize, args.resize, device=device)
     step_size = max(1, T_steps // ddim_steps)
@@ -140,16 +141,23 @@ def sample_ddim(n, labels, cfg_scale=1.0, ddim_steps=50):
         t_t = torch.full((n,), t, dtype=torch.long, device=device)
         eps_u = model(x, t_t, None)
         eps_c = model(x, t_t, labels)
-        eps = eps_u + cfg_scale * (eps_c - eps_u)
+        eps_pred = eps_u + cfg_scale * (eps_c - eps_u)
         a, ab = alpha[t], alpha_bar[t]
-        pred_x0 = (x - torch.sqrt(1 - ab)*eps) / torch.sqrt(ab)
+        
+        if target == 'epsilon':
+            # Standard: eps_pred is noise
+            pred_x0 = (x - torch.sqrt(1 - ab)*eps_pred) / torch.sqrt(ab)
+        else:
+            # v-prediction: eps_pred is v, decode to x0
+            pred_x0 = torch.sqrt(ab) * x - torch.sqrt(1.0 - ab) * eps_pred
+        
         a_prev = alpha[t - step_size] if t>=step_size else alpha[0]
-        x = torch.sqrt(a_prev)*pred_x0 + torch.sqrt(1 - a_prev)*eps
+        x = torch.sqrt(a_prev)*pred_x0 + torch.sqrt(1 - a_prev)*eps_pred
         x = torch.clip(x, -1.0, 1.0)
     return x
 
 @torch.no_grad()
-def edm_sampler(wrapper, n, labels, cfg=1.0, steps=20, solver='euler'):
+def edm_sampler(wrapper, n, labels, cfg=1.0, steps=20, solver='euler', target='epsilon'):
     sigmas = torch.linspace(SIGMA_MAX, SIGMA_MIN, steps, device=device)
     x = torch.randn(n, 3, args.resize, args.resize, device=device) * sigmas[0]
     for s, s_next in zip(sigmas[:-1], sigmas[1:]):
@@ -157,16 +165,34 @@ def edm_sampler(wrapper, n, labels, cfg=1.0, steps=20, solver='euler'):
         D_u = wrapper(x, s_vec, None)
         D_c = wrapper(x, s_vec, labels)
         D = D_u + cfg * (D_c - D_u)
+        
+        # Decode prediction to x0 based on target
+        if target == 'epsilon':
+            x0_pred = D  # EDM wrapper outputs x0 directly
+        else:
+            # v-prediction: decode v to x0: x0 = c_skip*x - c_out*v
+            c_skip = 1 / (s**2 + 1)
+            c_out = s / torch.sqrt(s**2 + 1)
+            x0_pred = c_skip * x - c_out * D
+        
         if solver == 'euler':
-            x = x + (s_next - s) * (x - D) / s
+            x = x + (s_next - s) * (x - x0_pred) / s
         else:  # heun
-            x_pred = x + (s_next - s) * (x - D) / s
+            x_pred = x + (s_next - s) * (x - x0_pred) / s
             if s_next > 1e-5:
                 s_next_vec = torch.full((n,), s_next, device=device)
                 D_u_p = wrapper(x_pred, s_next_vec, None)
                 D_c_p = wrapper(x_pred, s_next_vec, labels)
-                D_pred = D_u_p + cfg * (D_c_p - D_u_p)
-                x = x + (s_next - s) * ((x - D) / s + (x_pred - D_pred) / s_next) / 2
+                D_p = D_u_p + cfg * (D_c_p - D_u_p)
+                
+                if target == 'epsilon':
+                    x0_pred_p = D_p
+                else:
+                    c_skip_p = 1 / (s_next**2 + 1)
+                    c_out_p = s_next / torch.sqrt(s_next**2 + 1)
+                    x0_pred_p = c_skip_p * x_pred - c_out_p * D_p
+                
+                x = x + (s_next - s) * ((x - x0_pred) / s + (x_pred - x0_pred_p) / s_next) / 2
             else:
                 x = x_pred
         x = torch.clip(x, -1.0, 1.0)
@@ -185,25 +211,49 @@ for epoch in trange(1, args.epochs+1, desc="Training"):
         uncond_mask = ~cond_mask
 
         if not USE_EDM:
+            # DDIM branch: discrete t schedule
             t = torch.randint(0, T_steps, (imgs.shape[0],), device=device)
             xt, eps = forward_diffusion(imgs, t)
-            pred = torch.zeros_like(eps)
+            pred = torch.zeros_like(eps if args.target == 'epsilon' else imgs)
+            
             if cond_mask.any(): 
                 pred[cond_mask] = model(xt[cond_mask], t[cond_mask], train_labels[cond_mask])
             if uncond_mask.any(): 
                 pred[uncond_mask] = model(xt[uncond_mask], t[uncond_mask], None)
-            loss = F.mse_loss(pred, eps)
+            
+            if args.target == 'epsilon':
+                # Standard: predict noise
+                loss = F.mse_loss(pred, eps)
+            else:
+                # v-prediction: target = sqrt(alpha_bar)*eps - sqrt(1-alpha_bar)*imgs
+                sqrt_ab = torch.sqrt(alpha_bar[t])[:, None, None, None]
+                sqrt_1m = torch.sqrt(1.0 - alpha_bar[t])[:, None, None, None]
+                target_v = sqrt_ab * eps - sqrt_1m * imgs
+                loss = F.mse_loss(pred, target_v)
         else:
+            # EDM branch: continuous sigma schedule
             sigma = sample_sigmas(imgs.shape[0], device)
             x_sigma = imgs + sigma[:,None,None,None] * torch.randn_like(imgs)
             pred = torch.zeros_like(x_sigma)
+            
             if cond_mask.any(): 
                 pred[cond_mask] = edm_wrapper(x_sigma[cond_mask], sigma[cond_mask], train_labels[cond_mask])
             if uncond_mask.any(): 
                 pred[uncond_mask] = edm_wrapper(x_sigma[uncond_mask], sigma[uncond_mask], None)
-            c_out = sigma / torch.sqrt(sigma**2 + 1)
-            loss_weight = (1.0 / (c_out ** 2)).view(-1, 1, 1, 1)
-            loss = (loss_weight * F.mse_loss(pred, imgs, reduction='none')).mean()
+            
+            if args.target == 'epsilon':
+                # Standard EDM: predict x0, weight by 1/c_out^2
+                c_out = sigma / torch.sqrt(sigma**2 + 1)
+                loss_weight = (1.0 / (c_out ** 2)).view(-1, 1, 1, 1)
+                loss = (loss_weight * F.mse_loss(pred, imgs, reduction='none')).mean()
+            else:
+                # v-prediction for EDM: target = c_out*eps - c_skip*x0
+                c_skip = 1 / (sigma**2 + 1)
+                c_out = sigma / torch.sqrt(sigma**2 + 1)
+                eps = (x_sigma - imgs) / sigma[:, None, None, None]
+                target_v = c_out[:, None, None, None] * eps - c_skip[:, None, None, None] * imgs
+                # Uniform weighting for v-prediction (standard practice)
+                loss = F.mse_loss(pred, target_v)
 
         optimizer.zero_grad()
         loss.backward()
@@ -211,16 +261,16 @@ for epoch in trange(1, args.epochs+1, desc="Training"):
         epoch_loss += loss.item() * imgs.shape[0]
         count += imgs.shape[0]
 
-    # Evaluation
+    # Evaluation: sample with current target
     model.eval()
     with torch.no_grad():
         if not USE_EDM:
-            gen = sample_ddim(128, real_labels[:128].to(device), cfg_scale=args.cfg_scale, ddim_steps=20)
+            gen = sample_ddim(128, real_labels[:128].to(device), cfg_scale=args.cfg_scale, ddim_steps=20, target=args.target)
         else:
-            gen = edm_sampler(edm_wrapper, 128, real_labels[:128].to(device), cfg=args.cfg_scale, steps=args.sample_steps, solver=args.solver)
+            gen = edm_sampler(edm_wrapper, 128, real_labels[:128].to(device), cfg=args.cfg_scale, steps=args.sample_steps, solver=args.solver, target=args.target)
         fid = pca_fid(real_batch[:128], gen)
     metrics_log.append({'epoch': epoch, 'loss': epoch_loss/count, 'pca_fid': fid})
-    print(f"  Epoch {epoch:02d} | Loss: {metrics_log[-1]['loss']:.4f} | PCA-FID: {fid:.2f}")
+    print(f"  Epoch {epoch:02d} | Loss: {metrics_log[-1]['loss']:.4f} | PCA-FID ({args.target}): {fid:.2f}")
 
 with open('nanoddpm_pro_metrics.json', 'w') as f:
     json.dump(metrics_log, f, indent=2)
@@ -232,18 +282,18 @@ def plot_results():
     axs[0].set_title('Training Loss')
     axs[0].grid(alpha=0.3)
     axs[1].plot([m['epoch'] for m in metrics_log], [m['pca_fid'] for m in metrics_log], marker='s', color='orange')
-    axs[1].set_title(f'PCA-FID ({args.sampler.upper()}) ↓ better')
+    axs[1].set_title(f'PCA-FID ({args.sampler.upper()}/{args.target}) ↓ better')
     axs[1].grid(alpha=0.3)
     plt.tight_layout()
     plt.show()
     
-    print(f"\nFinal samples ({args.sampler.upper()}{'+'+args.solver if USE_EDM else ''}, CFG={args.cfg_scale}):")
+    print(f"\nFinal samples ({args.sampler.upper()}/{args.target}{'+'+args.solver if USE_EDM else ''}, CFG={args.cfg_scale}):")
     model.eval()
     with torch.no_grad():
         if not USE_EDM:
-            gen_final = sample_ddim(16, torch.randint(0, 10, (16,), device=device), cfg_scale=args.cfg_scale, ddim_steps=50)
+            gen_final = sample_ddim(16, torch.randint(0, 10, (16,), device=device), cfg_scale=args.cfg_scale, ddim_steps=50, target=args.target)
         else:
-            gen_final = edm_sampler(edm_wrapper, 16, torch.randint(0, 10, (16,), device=device), cfg=args.cfg_scale, steps=args.sample_steps, solver=args.solver)
+            gen_final = edm_sampler(edm_wrapper, 16, torch.randint(0, 10, (16,), device=device), cfg=args.cfg_scale, steps=args.sample_steps, solver=args.solver, target=args.target)
         grid = torchvision.utils.make_grid(gen_final, nrow=4, normalize=True, value_range=(-1,1))
         plt.figure(figsize=(5,5))
         plt.imshow(grid.permute(1,2,0).numpy())
@@ -251,4 +301,4 @@ def plot_results():
         plt.show()
 
 plot_results()
-print(f"Done. Metrics saved to nanoddpm_pro_metrics.json | Mode: {args.sampler}")
+print(f"Done. Metrics saved to nanoddpm_pro_metrics.json | Mode: {args.sampler}/{args.target}")
