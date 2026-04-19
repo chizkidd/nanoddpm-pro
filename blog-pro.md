@@ -66,6 +66,7 @@ EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **c
   $$
   c_{\text{in}} = \frac{1}{\sqrt{\sigma^2+1}}, \quad c_{\text{noise}} = \frac{\log\sigma}{4}, \quad c_{\text{skip}} = \frac{1}{\sigma^2+1}, \quad c_{\text{out}} = \frac{\sigma}{\sqrt{\sigma^2+1}}
   $$
+
   $$
   D(x, \sigma) = c_{\text{skip}} \cdot x + c_{\text{out}} \cdot F(x \cdot c_{\text{in}}, c_{\text{noise}})
   $$
@@ -75,18 +76,18 @@ The reverse process becomes a first-order ODE: $\frac{dx}{d\sigma} = \frac{x - D
 
 - **Euler Solver** (1st-order, fast):
 
-  $$
-  x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
-  $$
+    $$
+    x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
+    $$
 
 - **Heun Solver** (2nd-order, quality):
 
-  $$
-  \begin{aligned}
-  x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
-  x_{\text{next}} &= x + \frac{\sigma_{\text{next}} - \sigma}{2} \cdot \left( \frac{x - D}{\sigma} + \frac{x_{\text{pred}} - D_{\text{pred}}}{\sigma_{\text{next}}} \right)
-  \end{aligned}
-  $$
+    $$
+    \begin{aligned}
+    x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
+    x_{\text{next}} &= x + \frac{\sigma_{\text{next}} - \sigma}{2} \cdot \left( \frac{x - D}{\sigma} + \frac{x_{\text{pred}} - D_{\text{pred}}}{\sigma_{\text{next}}} \right)
+    \end{aligned}
+    $$
 
 ### Training Targets: Noise (`ε`) vs `v`-Prediction
 The network can be trained to predict different quantities. Both share the same architecture and ODE solvers, but differ in loss formulation and sampling decoding:
