@@ -149,7 +149,7 @@ def sample_ddim(n, labels, cfg_scale=1.0, ddim_steps=50, target='epsilon'):
             pred_x0 = (x - torch.sqrt(1 - ab)*eps_pred) / torch.sqrt(ab)
         else:
             # v-prediction: eps_pred is v, decode to x0
-            pred_x0 = torch.sqrt(ab)[:, None, None, None] * x - torch.sqrt(1 - ab)[:, None, None, None] * eps_pred
+            pred_x0 = torch.sqrt(ab) * x - torch.sqrt(1.0 - ab) * eps_pred
         
         a_prev = alpha[t - step_size] if t>=step_size else alpha[0]
         x = torch.sqrt(a_prev)*pred_x0 + torch.sqrt(1 - a_prev)*eps_pred
@@ -173,7 +173,7 @@ def edm_sampler(wrapper, n, labels, cfg=1.0, steps=20, solver='euler', target='e
             # v-prediction: decode v to x0: x0 = c_skip*x - c_out*v
             c_skip = 1 / (s**2 + 1)
             c_out = s / torch.sqrt(s**2 + 1)
-            x0_pred = c_skip[:, None, None, None] * x - c_out[:, None, None, None] * D
+            x0_pred = c_skip * x - c_out * D
         
         if solver == 'euler':
             x = x + (s_next - s) * (x - x0_pred) / s
@@ -190,7 +190,7 @@ def edm_sampler(wrapper, n, labels, cfg=1.0, steps=20, solver='euler', target='e
                 else:
                     c_skip_p = 1 / (s_next**2 + 1)
                     c_out_p = s_next / torch.sqrt(s_next**2 + 1)
-                    x0_pred_p = c_skip_p[:, None, None, None] * x_pred - c_out_p[:, None, None, None] * D_p
+                    x0_pred_p = c_skip_p * x_pred - c_out_p * D_p
                 
                 x = x + (s_next - s) * ((x - x0_pred) / s + (x_pred - x0_pred_p) / s_next) / 2
             else:
