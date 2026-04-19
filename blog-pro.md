@@ -144,4 +144,14 @@ $$
 | Colab free tier | `--resize 16 --sample_steps 10` for speed |
 | Portfolio depth | Train with `epsilon`, then compare `--target v` sampling |
 
-**Pro tip:** The unified file lets you swap samplers and targets at inference without retraining. Train once, then explore the 2×2 design space of `(sampler, target)` to see how each choice affects final quality.
+**Pro tip:** The unified file lets you swap samplers, solvers, and decoding targets at inference without retraining. Train once, then explore the design space via CLI:
+
+```bash
+# Train with standard noise prediction (2×2 design space to see how each choice affects final quality)
+python nanoddpm-pro.py --sampler edm --target epsilon --epochs 20
+
+# Swap to v-prediction decoding + Heun solver at inference
+python nanoddpm-pro.py --sampler edm --target v --solver heun --cfg_scale 4.0 --resize 32
+```
+
+---
