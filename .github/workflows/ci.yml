@@ -9,22 +9,60 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Prevent hung jobs
+    strategy:
+      fail-fast: false  # Continue testing other configs if one fails
+      matrix:
+        # Test the 4 core configurations
+        config:
+          - { name: "DDIM/epsilon", sampler: "ddim", target: "epsilon", steps: 100 }
+          - { name: "DDIM/v", sampler: "ddim", target: "v", steps: 100 }
+          - { name: "EDM/epsilon/Euler", sampler: "edm", target: "epsilon", solver: "euler", sample_steps: 10 }
+          - { name: "EDM/v/Heun", sampler: "edm", target: "v", solver: "heun", sample_steps: 10 }
+    
     steps:
       - uses: actions/checkout@v4
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'  # Speed up dependency installs
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Smoke test - DDIM sampler (CPU, minimal)
+      
+      - name: Smoke test - ${{ matrix.config.name }}
         run: |
-          python nanoddpm-pro.py --sampler ddim --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
-      - name: Smoke test - EDM sampler + Euler (CPU, minimal)
+          # Build command dynamically based on config
+          CMD="python nanoddpm-pro-latest.py"
+          CMD+=" --sampler ${{ matrix.config.sampler }}"
+          CMD+=" --target ${{ matrix.config.target }}"
+          CMD+=" --epochs 1"
+          CMD+=" --batch_size 16"
+          CMD+=" --resize 16"
+          CMD+=" --device cpu"
+          CMD+=" --cfg_scale 4.0"
+          
+          # Add sampler-specific flags
+          if [ "${{ matrix.config.sampler }}" = "ddim" ]; then
+            CMD+=" --steps ${{ matrix.config.steps }}"
+          else
+            CMD+=" --solver ${{ matrix.config.solver }}"
+            CMD+=" --sample_steps ${{ matrix.config.sample_steps }}"
+          fi
+          
+          echo "Running: $CMD"
+          $CMD
+      
+      - name: Verify metrics output
         run: |
-          python nanoddpm-pro.py --sampler edm --solver euler --epochs 1 --batch_size 16 --resize 16 --sample_steps 10 --device cpu
-        # run: |
-        #   python nanoddpm-pro-ddim.py --epochs 1 --steps 100 --batch_size 16 --resize 16 --device cpu
-        #   python nanoddpm-pro-edm.py --epochs 1 --batch_size 16 --resize 16 --sample_steps 10 --solver euler --device cpu
+          if [ -f nanoddpm_pro_metrics.json ]; then
+            echo "✅ Metrics file generated successfully"
+            python -c "import json; d=json.load(open('nanoddpm_pro_metrics.json')); print(f'Epochs logged: {len(d)}')"
+          else
+            echo "❌ Metrics file not found"
+            exit 1
+          fi
