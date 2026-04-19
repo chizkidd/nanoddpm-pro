@@ -112,8 +112,8 @@ nanoddpm-pro/
 Inspired by Andrej Karpathy's educational builds (microGPT`) and the foundational papers: DDPM (Ho et al.), DDIM (Song et al.), EDM (Karras et al.). Built for students, tinkerers, and anyone who believes diffusion shouldn't be a black box.
 
 ## Philosophy
-- _The readability of the code should translate to learnable mathematics._
-- _No black boxes. No heavy wrappers. Just raw PyTorch, explicit diffusion equations, and a Mini-UNet that fits in a single file._
+- The readability of the code should translate to learnable mathematics.
+- No black boxes. No heavy wrappers. Just raw PyTorch, explicit diffusion equations, and a Mini-UNet that fits in a single file.
 
 ## License
 MIT
