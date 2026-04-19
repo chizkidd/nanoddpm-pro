@@ -14,9 +14,11 @@ During training, we randomly drop the class label ~10% of the time, forcing the 
 - `ε_θ(x_t, t, ∅)` : noise prediction without conditioning
 
 At inference, we combine them linearly:
+
 $$
 \hat{\epsilon} = \epsilon_\theta(x_t, t, \emptyset) + w \cdot \left( \epsilon_\theta(x_t, t, y) - \epsilon_\theta(x_t, t, \emptyset) \right)
 $$
+
 Where `w` (`cfg_scale`) controls guidance strength:
 - `w = 1.0` → standard conditional sampling
 - `w = 3.0–7.5` → sharper, class-aligned outputs
@@ -30,19 +32,23 @@ Where `w` (`cfg_scale`) controls guidance strength:
 DDPM sampling is slow because it adds random noise at every reverse step. DDIM reparameterizes the reverse process as a **deterministic ODE**, allowing safe step-skipping.
 
 Starting from the DDPM reverse mean:
+
 $$
 \mu_\theta(x_t, t) = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\theta(x_t, t) \right)
 $$
 
 We predict $x_0$ directly:
+
 $$
 x_0 = \frac{x_t - \sqrt{1-\bar{\alpha}_t} \epsilon_\theta}{\sqrt{\bar{\alpha}_t}}
 $$
 
 DDIM replaces the stochastic update with:
+
 $$
 x_{t-1} = \sqrt{\bar{\alpha}_{t-1}} x_0 + \sqrt{1 - \bar{\alpha}_{t-1} - \sigma_t^2} \epsilon_\theta + \sigma_t z
 $$
+
 Setting $\sigma_t = 0$ removes noise `z`, making the path deterministic. We can evaluate at sparse steps (e.g., `t = 500, 250, 100, 50, 0`) and interpolate cleanly.
 
 **Result:** 10–50 steps instead of 500–1000. Same weights, same training loop, just a swapped sampler.  
@@ -56,6 +62,7 @@ EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **c
 ### Core Components
 - **Log-Normal Noise Sampling:** Draw noise levels from `σ ~ exp(𝒩(P_mean, P_std²))`. This concentrates training on mid-noise regimes where gradients are most informative.
 - **I/O Preconditioning** (Karras et al. 2022): Wrap the network with analytically derived scalars so it always sees normalized inputs/outputs, stabilizing gradients across the entire trajectory:
+
   $$
   c_{\text{in}} = \frac{1}{\sqrt{\sigma^2+1}}, \quad c_{\text{noise}} = \frac{\log\sigma}{4}, \quad c_{\text{skip}} = \frac{1}{\sigma^2+1}, \quad c_{\text{out}} = \frac{\sigma}{\sqrt{\sigma^2+1}}
   $$
@@ -67,11 +74,13 @@ EDM (Elucidating Diffusion Models) replaces heuristic noise schedules with a **c
 The reverse process becomes a first-order ODE: $\frac{dx}{d\sigma} = \frac{x - D(x,\sigma)}{\sigma}$. Discretizing gives two solver options:
 
 - **Euler Solver** (1st-order, fast):
+
   $$
   x_{\text{next}} = x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D(x,\sigma)}{\sigma}
   $$
 
 - **Heun Solver** (2nd-order, quality):
+
   $$
   \begin{aligned}
   x_{\text{pred}} &= x + (\sigma_{\text{next}} - \sigma) \cdot \frac{x - D}{\sigma} \\
