@@ -52,7 +52,7 @@ $$
 Setting $\sigma_t = 0$ removes noise `z`, making the path deterministic. We can evaluate at sparse steps (e.g., `t = 500, 250, 100, 50, 0`) and interpolate cleanly.
 
 **Result:** 10–50 steps instead of 500–1000. Same weights, same training loop, just a swapped sampler.  
-**Code:** `sample_ddim()` in `nanoddpm-pro.py`
+**Code:** `sample_ddim(target='epsilon'/'v')` in `nanoddpm-pro.py`
 
 ---
 
