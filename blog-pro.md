@@ -122,6 +122,7 @@ Standard FID uses Inception-V3 to extract 2048-dim features-heavy, opaque, and o
 2. Compute top-32 principal components across real + generated batches
 3. Project both sets into the 32D subspace
 4. Run the standard FID formula:
+
 $$
 \text{PCA-FID} = \|\mu_r - \mu_g\|^2 + \text{Tr}\!\left(\Sigma_r + \Sigma_g - 2\sqrt{\Sigma_r \Sigma_g}\right)
 $$
