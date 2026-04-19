@@ -8,8 +8,6 @@
 
 # nanoddpm-pro
 
-> Diffusion models from scratch
-
 From-scratch implementation of **Denoising Diffusion Probabilistic Model (DDPM)** with a **mini-UNet, Classifier-Free Guidance (CFG), DDIM/EDM sampling, Euler/Heun ODE solvers, v-prediction, and PCA-FID evaluation** on **CIFAR-10** dataset in ~300 lines. This project builds on the original ~170-line MNIST implementation: [chizkidd/nanoddpm](https://github.com/chizkidd/nanoddpm).
 
 A single, modular file (`nanoddpm-pro.py`) that cleanly branches between **DDIM** and **EDM** sampling, **epsilon** and **v-prediction** training targets, and **Euler**/**Heun** ODE solvers via CLI flags—all while sharing the Mini-UNet architecture, CFG logic, and PCA-FID evaluation.
