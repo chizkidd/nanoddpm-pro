@@ -13,12 +13,16 @@ jobs:
     strategy:
       fail-fast: false  # Continue testing other configs if one fails
       matrix:
-        # Test the 4 core configurations
+        # Test 8 core configurations (2 samplers × 2 targets × 2 datasets)
         config:
-          - { name: "DDIM/epsilon", sampler: "ddim", target: "epsilon", steps: 100 }
-          - { name: "DDIM/v", sampler: "ddim", target: "v", steps: 100 }
-          - { name: "EDM/epsilon/Euler", sampler: "edm", target: "epsilon", solver: "euler", sample_steps: 10 }
-          - { name: "EDM/v/Heun", sampler: "edm", target: "v", solver: "heun", sample_steps: 10 }
+          - { name: "DDIM/epsilon/MNIST", sampler: "ddim", target: "epsilon", dataset: "mnist", steps: 100 }
+          - { name: "DDIM/v/MNIST", sampler: "ddim", target: "v", dataset: "mnist", steps: 100 }
+          - { name: "DDIM/epsilon/CIFAR10", sampler: "ddim", target: "epsilon", dataset: "cifar10", steps: 100 }
+          - { name: "DDIM/v/CIFAR10", sampler: "ddim", target: "v", dataset: "cifar10", steps: 100 }
+          - { name: "EDM/epsilon/Euler/MNIST", sampler: "edm", target: "epsilon", solver: "euler", sample_steps: 10, dataset: "mnist" }
+          - { name: "EDM/v/Heun/MNIST", sampler: "edm", target: "v", solver: "heun", sample_steps: 10, dataset: "mnist" }
+          - { name: "EDM/epsilon/Euler/CIFAR10", sampler: "edm", target: "epsilon", solver: "euler", sample_steps: 10, dataset: "cifar10" }
+          - { name: "EDM/v/Heun/CIFAR10", sampler: "edm", target: "v", solver: "heun", sample_steps: 10, dataset: "cifar10" }
     
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +44,7 @@ jobs:
           CMD="python nanoddpm-pro.py"
           CMD+=" --sampler ${{ matrix.config.sampler }}"
           CMD+=" --target ${{ matrix.config.target }}"
+          CMD+=" --dataset ${{ matrix.config.dataset }}"
           CMD+=" --epochs 1"
           CMD+=" --batch_size 16"
           CMD+=" --resize 16"
