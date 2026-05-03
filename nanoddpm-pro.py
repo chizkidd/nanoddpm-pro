@@ -80,46 +80,50 @@ def sinusoidal_embedding(t, dim, max_period=10000):
     return torch.cat([torch.cos(args), torch.sin(args)], dim=1)
 
 class ResBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, time_dim, num_classes=11, dropout=0.1): # 11 = 10 classes + 1 unconditional
+    def __init__(self, in_ch, out_ch, time_dim, dropout=0.1):
         super().__init__()
-        self.num_groups_gn = min(8, out_ch)
+        num_groups = min(8, out_ch)  # safe group count that always divides out_ch
+        self.norm1 = nn.GroupNorm(num_groups, out_ch)
         self.conv1 = nn.Conv2d(in_ch, out_ch, 3, padding=1)
-        self.norm1 = nn.GroupNorm(self.num_groups_gn, out_ch)
+        self.norm2 = nn.GroupNorm(num_groups, out_ch)
         self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1)
-        self.norm2 = nn.GroupNorm(self.num_groups_gn, out_ch)
         self.time_mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_dim, out_ch))
-        self.class_emb = nn.Embedding(num_classes, time_dim)
-        self.class_proj = nn.Linear(time_dim, out_ch)
+        self.class_proj = nn.Linear(time_dim, out_ch) # receives the shared class embedding and projects to block channels
         self.dropout = nn.Dropout(dropout)
-        self.skip = nn.Conv2d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
+        self.skip = nn.Conv2d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity() # identity skip if channels match, else 1x1 conv
         self.time_dim = time_dim
 
-    def forward(self, x, t, labels=None):
+    def forward(self, x, t, c_emb=None):
         h = F.silu(self.norm1(self.conv1(x)))
         t_emb = self.time_mlp(sinusoidal_embedding(t, self.time_dim))
-        if labels is None:
-            c_emb = torch.zeros_like(t_emb)
-        else:
-            c_emb = self.class_proj(self.dropout(self.class_emb(labels)))
-        h = h + (t_emb + c_emb)[:, :, None, None]
-        return F.silu(self.norm2(self.conv2(h))) + self.skip(x)
+        if c_emb is not None:
+            c_emb = self.dropout(c_emb)          # apply dropout to shared embedding
+            c_proj = self.class_proj(c_emb)      # project to out_ch
+            t_emb = t_emb + c_proj               # fuse with time embedding
+        h = h + t_emb[:, :, None, None]          # broadcast conditional info
+        h = F.silu(self.norm2(self.conv2(h)))
+        return h + self.skip(x)
+
 
 class MiniUNet(nn.Module):
-    def __init__(self, in_ch=3, out_ch=3, time_dim=128, ch=32):
+    def __init__(self, in_ch=3, out_ch=3, time_dim=128, ch=32, num_classes=10):
         super().__init__()
+        # single embedding shared by all blocks
+        self.class_emb = nn.Embedding(num_classes + 1, time_dim)   # +1 = unconditional
         self.down1 = ResBlock(in_ch, ch, time_dim)
-        self.down2 = ResBlock(ch, ch*2, time_dim)
-        self.mid = ResBlock(ch*2, ch*2, time_dim)
-        self.up1 = ResBlock(ch*4, ch, time_dim)
-        self.up2 = ResBlock(ch*2, out_ch, time_dim)
-        self.out = nn.Conv2d(out_ch, out_ch, 1)
+        self.down2 = ResBlock(ch, ch * 2, time_dim)
+        self.mid   = ResBlock(ch * 2, ch * 2, time_dim)
+        self.up1   = ResBlock(ch * 4, ch, time_dim)       # input: mid + d2 = ch*4
+        self.up2   = ResBlock(ch * 2, out_ch, time_dim)   # input: up1 + d1 = ch*2
+        self.out   = nn.Conv2d(out_ch, out_ch, 1)
 
     def forward(self, x, t, labels=None):
-        d1 = self.down1(x, t, labels)
-        d2 = self.down2(F.avg_pool2d(d1, 2), t, labels)
-        x = self.mid(F.avg_pool2d(d2, 2), t, labels)
-        x = self.up1(torch.cat([F.interpolate(x, scale_factor=2), d2], 1), t, labels)
-        x = self.up2(torch.cat([F.interpolate(x, scale_factor=2), d1], 1), t, labels)
+        c_emb = self.class_emb(labels) if labels is not None else None
+        d1 = self.down1(x, t, c_emb)
+        d2 = self.down2(F.avg_pool2d(d1, 2), t, c_emb)
+        x = self.mid(F.avg_pool2d(d2, 2), t, c_emb)
+        x = self.up1(torch.cat([F.interpolate(x, scale_factor=2), d2], 1), t, c_emb)
+        x = self.up2(torch.cat([F.interpolate(x, scale_factor=2), d1], 1), t, c_emb)
         return self.out(x)
 
 class EDMWrapper(nn.Module):
